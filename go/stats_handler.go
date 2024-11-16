@@ -44,8 +44,10 @@ type UserStatistics struct {
 }
 
 type UserRankingEntry struct {
-	Username string
-	Score    int64
+	Username  string
+	Score     int64
+	Tips      int64
+	Reactions int64
 }
 type UserRanking []UserRankingEntry
 
@@ -81,59 +83,41 @@ func getUserStatisticsHandler(c echo.Context) error {
 	}
 
 	// ランク算出
-	var users []*UserModel
-	if err := dbConn.SelectContext(ctx, &users, "SELECT * FROM users"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get users: "+err.Error())
-	}
-
-	var ranking UserRanking
-	for _, user := range users {
-		var reactions int64
-		query := `
-		SELECT COUNT(*) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN reactions r ON r.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := dbConn.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
-		}
-
-		var tips int64
-		query = `
-		SELECT IFNULL(SUM(l2.tip), 0) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id	
-		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := dbConn.GetContext(ctx, &tips, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count tips: "+err.Error())
-		}
-
-		score := reactions + tips
-		ranking = append(ranking, UserRankingEntry{
-			Username: user.Name,
-			Score:    score,
-		})
-	}
-	sort.Sort(ranking)
-
-	var rank int64 = 1
-	for i := len(ranking) - 1; i >= 0; i-- {
-		entry := ranking[i]
-		if entry.Username == username {
-			break
-		}
-		rank++
+	var rankings []UserRankingEntry
+	query := `SELECT 
+	u.name AS username,
+	COALESCE(COUNT(r.id), 0) AS reactions,
+	COALESCE(SUM(lc.tip), 0) AS tips
+	FROM users u
+	LEFT JOIN livestreams l ON u.id = l.user_id
+	LEFT JOIN reactions r ON l.id = r.livestream_id
+	LEFT JOIN livecomments lc ON l.id = lc.livestream_id
+	GROUP BY u.id, u.name`
+	if err := dbConn.SelectContext(ctx, &rankings, query); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to calculate rankings: "+err.Error())
 	}
 
 	// リアクション数
 	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u 
-    INNER JOIN livestreams l ON l.user_id = u.id 
-    INNER JOIN reactions r ON r.livestream_id = l.id
-    WHERE u.name = ?
-	`
-	if err := dbConn.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
+	// スコア計算とランキングソート
+	for i := range rankings {
+		rankings[i].Score = rankings[i].Reactions + rankings[i].Tips
+
+		if username == rankings[i].Username {
+			totalReactions = rankings[i].Reactions
+		}
+	}
+	sort.Slice(rankings, func(i, j int) bool {
+		return rankings[i].Score > rankings[j].Score
+	})
+
+	// ランク計算
+	var rank int64 = 1
+	for i, entry := range rankings {
+		if entry.Username == username {
+			rank = int64(i + 1)
+			break
+		}
 	}
 
 	// ライブコメント数、チップ合計
