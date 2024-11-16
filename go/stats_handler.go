@@ -93,7 +93,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 	LEFT JOIN reactions r ON l.id = r.livestream_id
 	LEFT JOIN livecomments lc ON l.id = lc.livestream_id
 	GROUP BY u.id, u.name
-	ORDER BY score DESC`
+	ORDER BY score DESC, u.id ASC`
 	var rankings []UserRankingEntry
 	if err := dbConn.SelectContext(ctx, &rankings, query); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to calculate rankings: "+err.Error())
