@@ -85,9 +85,9 @@ func getUserStatisticsHandler(c echo.Context) error {
 	// ランク算出
 	query := `SELECT 
 	u.name AS username,
-	COALESCE(COUNT(r.id), 0) AS reactions,
+	COALESCE(COUNT(DISTINCT r.id), 0) AS reactions,
 	COALESCE(SUM(lc.tip), 0) AS tips,
-	(COALESCE(COUNT(r.id), 0) + COALESCE(SUM(lc.tip), 0)) AS score
+	(COALESCE(COUNT(DISTINCT r.id), 0) + COALESCE(SUM(lc.tip), 0)) AS score
 	FROM users u
 	LEFT JOIN livestreams l ON u.id = l.user_id
 	LEFT JOIN reactions r ON l.id = r.livestream_id
