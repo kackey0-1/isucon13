@@ -17,8 +17,10 @@ RUN useradd --uid=1001 --create-home isucon
 USER isucon
 
 RUN mkdir -p /home/isucon/webapp/go
+RUN mkdir -p /home/isucon/webapp/sql
 WORKDIR /home/isucon/webapp/go
-COPY --chown=isucon:isucon ./ /home/isucon/webapp/go/
+COPY --chown=isucon:isucon ./go/ /home/isucon/webapp/go/
+COPY --chown=isucon:isucon ./sql/ /home/isucon/webapp/sql/
 RUN go build -o isupipe .
 
 ENV GOPATH=/home/isucon/tmp/go

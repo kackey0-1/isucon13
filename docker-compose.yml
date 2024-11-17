@@ -1,0 +1,73 @@
+services:
+  app:
+    cpus: 2
+    mem_limit: 4g
+    build: 
+      context: .
+    init: true
+    working_dir: /home/isucon/webapp/go
+    container_name: webapp
+    volumes:
+      - ./sql:/home/isucon/webapp/sql
+      - ./pdns:/home/isucon/webapp/pdns
+      - ./pdns/powerdns/pdns.conf:/etc/powerdns/pdns.conf:ro
+      - ./pdns/powerdns/pdns.d/docker.conf:/etc/powerdns/pdns.d/docker.conf:ro
+      - ./img:/home/isucon/webapp/img
+    environment:
+      ISUCON13_MYSQL_DIALCONFIG_ADDRESS: mysql
+      ISUCON13_POWERDNS_HOST: powerdns
+      ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS: 127.0.0.1
+      ISUCON13_POWERDNS_DISABLED: true
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    volumes:
+      - ./etc/nginx/conf.d:/etc/nginx/conf.d
+    ports:
+      - 127.0.0.1:8443:80
+    depends_on:
+      - app
+
+  mysql:
+    image: mysql/mysql-server:8.0.31
+    container_name: mysql_isucon13
+    environment:
+      - "MYSQL_ROOT_HOST=%"
+      - "MYSQL_ROOT_PASSWORD=root"
+    volumes:
+      - ./sql/initdb.d:/docker-entrypoint-initdb.d
+    ports:
+      - "127.0.0.1:33006:3306"
+    restart: always
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -uisucon -pisucon
+      interval: 1s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+
+  powerdns:
+    image: powerdns/pdns-auth-master
+    container_name: powerdns
+    environment:
+      - "PDNS_AUTH_API_KEY=isudns"
+    ports:
+      - "127.0.0.1:1053:53"
+      - "127.0.0.1:1053:53/udp"
+      - "127.0.0.1:8081:8081"
+    volumes:
+      # NOTE: gsqlite3バックエンドを読み込もうとするので、これを上書きしてしまう
+      # https://github.com/PowerDNS/pdns/blob/8cbe7d8e3c44f87b986a6f88cda98c3a0d943026/Dockerfile-auth#L88 
+      # https://github.com/PowerDNS/pdns/blob/8cbe7d8e3c44f87b986a6f88cda98c3a0d943026/dockerdata/pdns.conf#L3
+      - ./pdns/powerdns/pdns.conf:/etc/powerdns/pdns.conf:ro
+      - ./pdns/powerdns/pdns.d/docker.conf:/etc/powerdns/pdns.d/docker.conf:ro
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
