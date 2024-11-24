@@ -9,3 +9,5 @@ CREATE INDEX icons_user_id_idx ON icons(`user_id`);
 CREATE INDEX livestreams_user_id_idx ON livestreams(`user_id`);
 CREATE INDEX reactions_livestream_id_idx ON reactions(`livestream_id`);
 
+-- feature/statistic_api
+CREATE INDEX livestream_viewers_history_livestream_id_idx ON livestream_viewers_history(`livestream_id`);
