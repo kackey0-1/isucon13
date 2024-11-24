@@ -112,11 +112,11 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// ランク計算
 	var rank int64 = 1
-	for i, entry := range rankings {
+	for _, entry := range rankings {
 		if entry.Username == username {
-			rank = int64(i + 1)
 			break
 		}
+		rank++
 	}
 
 	// ライブコメント数、チップ合計
